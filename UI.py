@@ -14,14 +14,12 @@ import time
 class OfficeObjectClassifier:
     def __init__(self, root):
         
-        #Initialize the main application window and variables.
         self.root = root
         self.root.title("Office Object Classifier with Detection")
         self.root.geometry("1100x900")
         self.root.state('zoomed')
         self.root.configure(bg='#f0f4f8')
 
-        
         # Device and Model Settings
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.class_names = [
@@ -29,14 +27,11 @@ class OfficeObjectClassifier:
             'Mouse', 'Mug', 'Pen_Pencil', 'Stapler', 'Tape_Dispenser'
         ]
         self.INPUT_SIZE = 224
-        self.CONFIDENCE_THRESHOLD = 0.70  # 70% confidence threshold
+        self.CONFIDENCE_THRESHOLD = 0.70
 
-        # Load trained model
         self.model = self.load_model()
 
-        # Test-Time Augmentation (TTA) Transforms
         self.tta_transforms = [
-            #Original Image
             transforms.Compose([
                 transforms.Resize(256),
                 transforms.CenterCrop(self.INPUT_SIZE),
@@ -44,8 +39,6 @@ class OfficeObjectClassifier:
                 transforms.Normalize([0.485, 0.456, 0.406],
                                      [0.229, 0.224, 0.225])
             ]),
-
-            #Horizontally Flipped
             transforms.Compose([
                 transforms.Resize(256),
                 transforms.CenterCrop(self.INPUT_SIZE),
@@ -54,8 +47,6 @@ class OfficeObjectClassifier:
                 transforms.Normalize([0.485, 0.456, 0.406],
                                      [0.229, 0.224, 0.225])
             ]),
-
-            #Slight Rotation
             transforms.Compose([
                 transforms.Resize(256),
                 transforms.CenterCrop(self.INPUT_SIZE),
@@ -66,23 +57,22 @@ class OfficeObjectClassifier:
             ])
         ]
         
-        # Camera Variables
         self.camera = None
         self.camera_active = False
         self.current_frame = None
         self.screenshot_count = 0
 
-        # Build the Tkinter UI
         self.create_widgets()
 
-    # MODEL LOADING FUNCTION
     def load_model(self):
-        
         try:
             model = models.resnet50(weights=None)
             num_ftrs = model.fc.in_features
-            model.fc = nn.Linear(num_ftrs, len(self.class_names))
-            model.load_state_dict(torch.load('best_model_weights.pth', map_location=self.device))
+            model.fc = nn.Sequential(
+                nn.Dropout(0.4),
+                nn.Linear(num_ftrs, len(self.class_names))
+            )
+            model.load_state_dict(torch.load('best_model_weights.pth', map_location=self.device, weights_only=True))
             model = model.to(self.device)
             model.eval()
             print(f"Model loaded successfully on {self.device}")
@@ -92,12 +82,13 @@ class OfficeObjectClassifier:
             print("Using default pretrained weights for demo...")
             model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
             num_ftrs = model.fc.in_features
-            model.fc = nn.Linear(num_ftrs, len(self.class_names))
+            model.fc = nn.Sequential(
+                nn.Dropout(0.4),
+                nn.Linear(num_ftrs, len(self.class_names))
+            )
             model = model.to(self.device)
             model.eval()
             return model
-
-    #UI LAYOUT CREATION
 
     def create_widgets(self):
         
@@ -109,13 +100,14 @@ class OfficeObjectClassifier:
         tk.Label(title_frame, text="ResNet-50 | Real-time Detection | Office Objects",
                  font=('Helvetica', 10), bg='#2c3e50', fg='#ecf0f1').pack()
 
-        # Main content
+        # Main content frame
         content_frame = tk.Frame(self.root, bg='#f0f4f8')
         content_frame.pack(fill='both', expand=True, padx=20, pady=20)
 
         # Buttons for image and camera
         button_frame = tk.Frame(content_frame, bg='#f0f4f8')
-        button_frame.pack(pady=10)
+        button_frame.pack(pady=10, anchor='center')
+        
         self.upload_btn = tk.Button(button_frame, text="Upload Image",
                                     font=('Helvetica', 14, 'bold'),
                                     bg='#3498db', fg='white',
@@ -131,8 +123,13 @@ class OfficeObjectClassifier:
         self.camera_btn.grid(row=0, column=1, padx=10)
 
         # Display area
-        self.display_frame = tk.Frame(content_frame, bg='white', relief='solid', borderwidth=2, height=400)
-        self.display_frame.pack(pady=20, fill='both', expand=False)
+        display_wrapper = tk.Frame(content_frame, bg='#f0f4f8')
+        display_wrapper.pack(pady=15, anchor='center')
+        
+        self.display_frame = tk.Frame(display_wrapper, bg='white', relief='solid', borderwidth=2, height=350, width=700)
+        self.display_frame.pack(pady=15)
+        self.display_frame.pack_propagate(False)
+        
         self.image_label = tk.Label(self.display_frame, text="No image loaded",
                                     font=('Helvetica', 14), bg='white', fg='gray')
         self.image_label.pack(expand=True)
@@ -140,35 +137,28 @@ class OfficeObjectClassifier:
         tk.Label(content_frame, text="🟢 Green = Recognized | 🔴 Red = Unknown (<70%)",
                  font=('Helvetica', 9), bg='#f0f4f8', fg='#555').pack(pady=5)
 
-        # Camera controls
-        self.camera_controls_frame = tk.Frame(content_frame, bg='#f0f4f8')
-        tk.Button(self.camera_controls_frame, text="📸 Capture & Detect",
-                  font=('Helvetica', 12, 'bold'), bg='#e74c3c', fg='white',
-                  width=18, height=2, cursor='hand2',
-                  command=self.capture_and_classify).pack(side='left', padx=5)
-        tk.Button(self.camera_controls_frame, text="💾 Save Screenshot",
-                  font=('Helvetica', 12, 'bold'), bg='#f39c12', fg='white',
-                  width=18, height=2, cursor='hand2',
-                  command=self.save_screenshot).pack(side='left', padx=5)
-        self.fps_label = tk.Label(content_frame, text="FPS: 0.0",
-                                  font=('Helvetica', 10), bg='#f0f4f8', fg='#27ae60')
-
-        # Results display
-        self.result_frame = tk.Frame(content_frame, bg='#ecf0f1', relief='solid', borderwidth=2)
-        self.result_frame.pack(fill='x', pady=10)
+        # Results display frame
+        result_wrapper = tk.Frame(content_frame, bg='#f0f4f8')
+        result_wrapper.pack(pady=10, anchor='center')
+        
+        self.result_frame = tk.Frame(result_wrapper, bg='#ecf0f1', relief='solid', borderwidth=2, width=700)
+        self.result_frame.pack(fill='x')
+        
         tk.Label(self.result_frame, text="Detection Result",
                  font=('Helvetica', 12, 'bold'), bg='#ecf0f1').pack(pady=5)
-        self.result_label = tk.Label(self.result_frame, text="Predicted Class: -",
-                                     font=('Helvetica', 14), bg='#ecf0f1')
-        self.result_label.pack(pady=5)
+        
+        self.result_label = tk.Label(self.result_frame, text="Predicted: -",
+                                     font=('Helvetica', 11), bg='#ecf0f1')
+        self.result_label.pack(pady=3)
+        
         self.confidence_label = tk.Label(self.result_frame, text="Confidence: -",
-                                         font=('Helvetica', 12), bg='#ecf0f1')
-        self.confidence_label.pack(pady=5)
+                                         font=('Helvetica', 11), bg='#ecf0f1')
+        self.confidence_label.pack(pady=3)
+        
         self.status_label = tk.Label(self.result_frame, text="Status: -",
                                      font=('Helvetica', 11, 'bold'), bg='#ecf0f1')
-        self.status_label.pack(pady=5)
+        self.status_label.pack(pady=3)
 
-    #IMAGE DETECTION & CLASSIFICATION
     def detect_object_region(self, image):
 
         if isinstance(image, Image.Image):
@@ -193,7 +183,6 @@ class OfficeObjectClassifier:
                 w, h = min(w_img - x, w + 2 * pad), min(h_img - y, h + 2 * pad)
                 return (x, y, x + w, y + h)
 
-        # Default bounding box (if contour fails)
         h, w = img_array.shape[:2]
         m = int(min(h, w) * 0.1)
         return (m, m, w - m, h - m)
@@ -240,7 +229,6 @@ class OfficeObjectClassifier:
             print(f"Classification error: {e}")
             return "Error", 0.0
 
-    #CAMERA FUNCTIONS
     def toggle_camera(self):
         if self.camera_active:
             self.stop_camera()
@@ -256,8 +244,6 @@ class OfficeObjectClassifier:
                 return
             self.camera_active = True
             self.camera_btn.config(text="Stop Camera", bg='#e74c3c')
-            self.camera_controls_frame.pack(pady=10)
-            self.fps_label.pack(pady=5)
             Thread(target=self.update_camera, daemon=True).start()
         except Exception as e:
             messagebox.showerror("Error", f"Camera error: {str(e)}")
@@ -269,10 +255,8 @@ class OfficeObjectClassifier:
             self.camera.release()
             self.camera = None
         self.camera_btn.config(text="Live Camera", bg='#2ecc71')
-        self.camera_controls_frame.pack_forget()
-        self.fps_label.pack_forget()
         self.image_label.config(image='', text="No image loaded")
-        self.result_label.config(text="Predicted Class: -", fg='black')
+        self.result_label.config(text="Predicted: -", fg='black')
         self.confidence_label.config(text="Confidence: -", fg='black')
         self.status_label.config(text="Status: -", fg='black')
 
@@ -294,10 +278,9 @@ class OfficeObjectClassifier:
             self.image_label.config(image=photo, text='')
             self.image_label.image = photo
 
-
-    #IMAGE HANDLING
     def upload_image(self):
         self.stop_camera()
+        
         path = filedialog.askopenfilename(title="Select an image",
                                           filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")])
         if not path:
@@ -309,6 +292,7 @@ class OfficeObjectClassifier:
             img_box, status = self.draw_detection_box(img.copy(), cls, conf, bbox)
             self.display_image(img_box)
             self.update_results(cls, conf, status)
+            self.root.update()
         except Exception as e:
             messagebox.showerror("Error", str(e))
 
@@ -346,26 +330,37 @@ class OfficeObjectClassifier:
         self.image_label.config(image=photo, text='')
         self.image_label.image = photo
 
-
     def update_results(self, cls, conf, status):
         
         is_rec = conf >= self.CONFIDENCE_THRESHOLD * 100
-        self.result_label.config(text=f"Predicted: {cls if is_rec else 'Unknown'}",
-                                 fg='#27ae60' if is_rec else '#e74c3c')
-        self.confidence_label.config(text=f"Confidence: {conf:.2f}%",
-                                     fg='#27ae60' if is_rec else '#e74c3c')
-        self.status_label.config(text=f"Status: {'✓' if is_rec else '✗'} {status}",
-                                 fg='#27ae60' if is_rec else '#e74c3c')
+        
+        if is_rec:
+            predicted_text = f"Predicted: {cls.replace('_', ' ')}"
+        else:
+            predicted_text = "Predicted: Unknown"
+        
+        confidence_text = f"Confidence: {conf:.1f}%"
+        
+        if is_rec:
+            status_text = "Status: ✓ DETECTED"
+        else:
+            status_text = "Status: ✗ UNKNOWN"
+        
+        text_color = '#27ae60' if is_rec else '#e74c3c'
+        
+        self.result_label.config(text=predicted_text, fg=text_color)
+        self.confidence_label.config(text=confidence_text, fg=text_color)
+        self.status_label.config(text=status_text, fg=text_color)
+        
+        self.root.update_idletasks()
 
-    #EXIT FUNCTION
     def on_closing(self):
         self.stop_camera()
         self.root.destroy()
 
 
-#MAIN ENTRY POINT
 if __name__ == "__main__":
     root = tk.Tk()
     app = OfficeObjectClassifier(root)
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
-    root.mainloop()  
+    root.mainloop()

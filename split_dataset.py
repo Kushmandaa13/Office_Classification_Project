@@ -1,84 +1,95 @@
-# ================================================================
-# resplit_dataset_safe.py
-# Purpose: Reorganize dataset into train/val/test (70/15/15)
-# Safe for Windows / OneDrive
-# ================================================================
+import os
+import shutil
+import random
+from pathlib import Path
 
-import os, shutil, random
+def split_dataset(source_dir, train_dir, val_dir, test_dir, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
+    
+    # Verify ratios sum to 1
+    if abs(train_ratio + val_ratio + test_ratio - 1.0) > 0.001:
+        raise ValueError("Ratios must sum to 1.0")
+    
+    # Get all class folders
+    class_folders = [f for f in os.listdir(source_dir) 
+                    if os.path.isdir(os.path.join(source_dir, f))]
+    
+    print(f"Found {len(class_folders)} classes: {class_folders}\n")
+    
+    for class_name in class_folders:
+        source_class_path = os.path.join(source_dir, class_name)
+        
+        # Get all image files
+        image_files = [f for f in os.listdir(source_class_path) 
+                      if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif'))]
+        
+        total_images = len(image_files)
+        print(f"Processing class '{class_name}': {total_images} images")
+        
+        # Shuffle images randomly
+        random.shuffle(image_files)
+        
+        # Calculate split indices
+        train_count = int(total_images * train_ratio)
+        val_count = int(total_images * val_ratio)
+        # test_count gets the remainder to ensure all images are used
+        
+        train_images = image_files[:train_count]
+        val_images = image_files[train_count:train_count + val_count]
+        test_images = image_files[train_count + val_count:]
+        
+        print(f"  - Train: {len(train_images)}, Val: {len(val_images)}, Test: {len(test_images)}")
+        
+        # Create class folders in validation and test directories
+        val_class_path = os.path.join(val_dir, class_name)
+        test_class_path = os.path.join(test_dir, class_name)
+        os.makedirs(val_class_path, exist_ok=True)
+        os.makedirs(test_class_path, exist_ok=True)
+        
+        # Move validation images
+        for img in val_images:
+            src = os.path.join(source_class_path, img)
+            dst = os.path.join(val_class_path, img)
+            shutil.move(src, dst)
+        
+        # Move test images
+        for img in test_images:
+            src = os.path.join(source_class_path, img)
+            dst = os.path.join(test_class_path, img)
+            shutil.move(src, dst)
+        
+        print(f"Completed '{class_name}'\n")
+    
+    print("Dataset split completed successfully!")
 
-BASE_DIR = "data"
-SRC_DIR = os.path.join(BASE_DIR, "train")
-VAL_DIR = os.path.join(BASE_DIR, "val")
-TEST_DIR = os.path.join(BASE_DIR, "test")
-
-SPLITS = {"train": 0.7, "val": 0.15, "test": 0.15}
-
-
-def clean_folder(folder_path):
-    """Safely clear contents of a folder (Windows/OneDrive-friendly)."""
-    if not os.path.exists(folder_path):
-        os.makedirs(folder_path, exist_ok=True)
-        return
-    for root, dirs, files in os.walk(folder_path):
-        for f in files:
-            try:
-                os.remove(os.path.join(root, f))
-            except Exception as e:
-                print(f"⚠️ Could not remove file {f}: {e}")
-        for d in dirs:
-            try:
-                shutil.rmtree(os.path.join(root, d), ignore_errors=True)
-            except Exception as e:
-                print(f"⚠️ Could not remove subfolder {d}: {e}")
-
-
-# --- Clean existing val/test folders ---
-print("🧹 Cleaning val/ and test/ directories...")
-clean_folder(VAL_DIR)
-clean_folder(TEST_DIR)
-
-# --- Perform splitting ---
-print("\n🚀 Starting dataset re-split (70% train, 15% val, 15% test)...")
-
-for cls in sorted(os.listdir(SRC_DIR)):
-    src_cls_path = os.path.join(SRC_DIR, cls)
-    if not os.path.isdir(src_cls_path):
-        continue
-
-    all_imgs = [f for f in os.listdir(src_cls_path)
-                if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-    random.shuffle(all_imgs)
-
-    total = len(all_imgs)
-    if total == 0:
-        print(f"⚠️ Skipping empty class folder: {cls}")
-        continue
-
-    n_train = int(total * SPLITS["train"])
-    n_val = int(total * SPLITS["val"])
-
-    splits = {
-        "train": all_imgs[:n_train],
-        "val": all_imgs[n_train:n_train + n_val],
-        "test": all_imgs[n_train + n_val:]
-    }
-
-    print(f"\n📁 Class: {cls}")
-    print(f"   Total: {total} → Train {len(splits['train'])}, "
-          f"Val {len(splits['val'])}, Test {len(splits['test'])}")
-
-    # Copy images into val/test
-    for split in ["val", "test"]:
-        dest_dir = os.path.join(BASE_DIR, split, cls)
-        os.makedirs(dest_dir, exist_ok=True)
-        for f in splits[split]:
-            src = os.path.join(src_cls_path, f)
-            dst = os.path.join(dest_dir, f)
-            if not os.path.exists(dst):
-                try:
-                    shutil.copy2(src, dst)
-                except Exception as e:
-                    print(f"⚠️ Could not copy {src} → {dst}: {e}")
-
-print("\n✅ Dataset re-splitting complete!")
-print("Your dataset is now under data/train, data/val, and data/test.")
+if __name__ == "__main__":
+    # Set random seed for reproducibility
+    random.seed(42)
+    
+    # Define paths - adjust these to your actual paths
+    base_dir = "data"
+    train_folder = os.path.join(base_dir, "train")
+    val_folder = os.path.join(base_dir, "validation")
+    test_folder = os.path.join(base_dir, "test")
+    
+    # Create validation and test folders if they don't exist
+    os.makedirs(val_folder, exist_ok=True)
+    os.makedirs(test_folder, exist_ok=True)
+    
+    print("=" * 50)
+    print("Image Dataset Splitter (70/15/15)")
+    print("=" * 50)
+    print(f"Source: {train_folder}")
+    print(f"Validation: {val_folder}")
+    print(f"Test: {test_folder}")
+    print("=" * 50 + "\n")
+    
+    # Perform the split
+    split_dataset(
+        source_dir=train_folder,
+        train_dir=train_folder,
+        val_dir=val_folder,
+        test_dir=test_folder,
+        train_ratio=0.7,
+        val_ratio=0.15,
+        test_ratio=0.15
+    )

@@ -1,5 +1,5 @@
 data/train/ 
 data/test/ 
-data/validation/ 
+data/val/ 
 __pycache__/ 
 .ipynb_checkpoints/ 

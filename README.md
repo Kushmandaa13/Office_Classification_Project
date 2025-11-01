@@ -303,7 +303,6 @@ Watch the system design overview covering:
 - Software architecture (ROS 2, perception, planning)
 - Dataset and model training approach
 
-**Add video link here from MDX platform**
 
 ## Code Walkthrough Video (2 minutes)
 
@@ -313,7 +312,6 @@ Watch the code demonstration showing:
 - GUI application in action
 - Real-time classification demo with webcam and uploaded images
 
-**Add video link here from MDX platform**
 
 ## Model Architecture
 
@@ -389,3 +387,4 @@ For questions or issues, please reach out to the team or contact the module tuto
 
 **Last Updated**: 1 November 2025
 **Repository**: https://github.com/Kushmandaa13/Office_Classification_Project
+

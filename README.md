@@ -35,6 +35,14 @@ It includes two main components:
 
 The model is trained on a custom dataset built for this task.
 
+## Dataset Access
+
+The dataset used for training and testing this project is not included in the repository due to file size.  
+You can download it from the following link:
+
+🔗 [Dataset Download (Google Drive)](https://drive.google.com/drive/folders/180qCRkaOzs-EO_hsVqUxGvUFifEeTx1Q?usp=sharing)
+
+
 ### Dataset Overview
 - **Data Source**: A mix of custom images (~30% captured via webcam/mobile) and images from public datasets (~70% from Google Images, Open Images Dataset)
 - **Total Images**: 3,206
@@ -387,4 +395,5 @@ For questions or issues, please reach out to the team or contact the module tuto
 
 **Last Updated**: 1 November 2025
 **Repository**: https://github.com/Kushmandaa13/Office_Classification_Project
+
 
